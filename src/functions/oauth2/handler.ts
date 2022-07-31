@@ -2,7 +2,7 @@ import 'source-map-support/register';
 
 import type {APIGatewayProxyEventV2, APIGatewayProxyResultV2} from "aws-lambda"
 import {middyfy} from '@libs/lambda';
-import {jwt} from 'jsonwebtoken';
+const jwt = require('jsonwebtoken');
 const tojwks = require('rsa-pem-to-jwk');
 
 const issuer = process.env.ISSUER || 'mock';
@@ -127,16 +127,45 @@ function get_base_url(event : APIGatewayProxyEventV2) : string {
   return `https://${event.requestContext.domainName}`;
 }
 
-const oauth2_token = async (event : APIGatewayProxyEventV2) : Promise<APIGatewayProxyResultV2> => {
-  const params = JSON.parse(event.body);
+function parse_content(body : string, content_type : string) : any {
+  if(content_type == 'application/x-www-form-urlencoded') {
+    const items = body.split('&');
+    let r = {};
+    for(let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const kv = item.split('=', 2);
+      const key = kv[0];
+      const value = decodeURIComponent(kv[1]);
+      r[key] = value;
+    }
+    return r;
+  } else {
+    return JSON.parse(body);
+  }
+}
 
-  const grant_type = params.get('grant_type');
+function get_parsed_content(event : APIGatewayProxyEventV2) : any {
+  let body = event.body;
+  if (event.isBase64Encoded) {
+    let buff = Buffer.from(body, "base64");
+    body = buff.toString('utf-8');
+  }
+  return parse_content(body, event.headers['content-type']);
+}
+
+const oauth2_token = async (event : APIGatewayProxyEventV2) : Promise<APIGatewayProxyResultV2> => {
+
+  const params = get_parsed_content(event);
+
+  console.log(JSON.stringify(params));
+
+  const grant_type = params['grant_type'];
   if( grant_type == 'authorization_code' || grant_type == "refresh_token"){
     let code;
     if( grant_type == "refresh_token" )
-      code = Buffer.from(params.get('refresh_token'), 'hex').toString('ascii');
+      code = Buffer.from(params['refresh_token'], 'hex').toString('ascii');
     else
-      code = Buffer.from(params.get('code'), 'hex').toString('ascii');
+      code = Buffer.from(params['code'], 'hex').toString('ascii');
     let code_list = code.split(':');
 
     const client_id = code_list[0];
@@ -145,13 +174,15 @@ const oauth2_token = async (event : APIGatewayProxyEventV2) : Promise<APIGateway
 
     const tokens = make_tokens(client_id, userid, scope, grant_type != "refresh_token" );
 
+    console.log(JSON.stringify(tokens));
+
     return {
       statusCode: 200,
       body: JSON.stringify(tokens)
     }
   } else if( grant_type == 'client_credentials'){
-    const scope = params.get('scope');
-    const client_id = params.get('client_id');
+    const scope = params['scope'];
+    const client_id = params['client_id'];
 
     const tokens = make_access_token(client_id, scope);
 
