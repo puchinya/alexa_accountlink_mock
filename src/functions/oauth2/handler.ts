@@ -5,10 +5,11 @@ import {middyfy} from '@libs/lambda';
 const jwt = require('jsonwebtoken');
 const tojwks = require('rsa-pem-to-jwk');
 
-const OPENID_ISSUER = process.env.OPENID_ISSUER || 'mock';
-const OPENID_KEYID = process.env.OPENID_KEYID || 'testkeyid';
-const ACCESS_AND_ID_TOKEN_EXPIRES = parseInt(process.env.ACCESS_AND_ID_TOKEN_EXPIRES) || 60 * 60;
-const TOKEN_PRIKEY_PEM = process.env.TOKEN_PRIKEY_PEM || "-----BEGIN RSA PRIVATE KEY-----\n" +
+const DEFAULT_ACCESS_TOKEN_EXPIRES = 3600;
+const DEFAULT_ID_TOKEN_EXPIRES = 3600;
+const DEFAULT_OPENID_ISSUER = 'mock';
+const DEFAULT_OPENID_KEYID = 'mock';
+const DEFAULT_TOKEN_PRIVATE_KEY_PEM = "-----BEGIN RSA PRIVATE KEY-----\n" +
     "MIIEpAIBAAKCAQEArPuK1U6B+PDta4NGONxQqYGWZGs5DvIFAWgrX5rQbtscjNMm\n" +
     "11Gpmg8PubADSCn/+pLpUl88pxsAWuMdQb4ULF5rdM0kl/VG5nVv6hVAxXzvVy9S\n" +
     "vLbOkzNnyfPyEd9gWTICz9szXsW7cvn9bwh7xQSTKPxZlIQBcsDuTmcGQq7/w2Y/\n" +
@@ -35,9 +36,15 @@ const TOKEN_PRIKEY_PEM = process.env.TOKEN_PRIKEY_PEM || "-----BEGIN RSA PRIVATE
     "ikzGW3jQVa8p3XU6d6JxpFUnSr26Jtkg7u5YzZ3h6ujjgxvmHSq8ejVzDCIoKLHO\n" +
     "la+RQlqzWsiS+spY9V3l7B+ux4z17kgB1vBm90kDGzkFvyEYppXWmQ==\n" +
     "-----END RSA PRIVATE KEY-----\n";
+
+const OPENID_ISSUER = process.env.OPENID_ISSUER || DEFAULT_OPENID_ISSUER;
+const OPENID_KEYID = process.env.OPENID_KEYID || DEFAULT_OPENID_KEYID;
+const ACCESS_TOKEN_EXPIRES = parseInt(process.env.ACCESS_TOKEN_EXPIRES) || DEFAULT_ACCESS_TOKEN_EXPIRES;
+const ID_TOKEN_EXPIRES = parseInt(process.env.ID_TOKEN_EXPIRES) || DEFAULT_ID_TOKEN_EXPIRES;
+const TOKEN_PRIVATE_KEY_PEM = process.env.TOKEN_PRIKEY_PEM || DEFAULT_TOKEN_PRIVATE_KEY_PEM
 let jwkjson = null;
 
-function make_redirect_response(url: string) : any
+function makeRedirectResponse(url: string) : any
 {
   return {
     statusCode: 303,
@@ -47,61 +54,61 @@ function make_redirect_response(url: string) : any
   }
 }
 
-function make_bad_request_response() : any
+function makeBadRequestResponse() : any
 {
   return {
     statusCode: 400
   }
 }
 
-function make_access_token(client_id : string, scope : string) : any
+function makeAccessToken(client_id : string, scope : string) : any
 {
-  const payload_access_token = {
+  const payloadAccessToken = {
     token_use: 'access',
     scope: scope,
     client_id: client_id,
   };
-  const access_token = jwt.sign(payload_access_token, TOKEN_PRIKEY_PEM, {
+  const accessToken = jwt.sign(payloadAccessToken, TOKEN_PRIVATE_KEY_PEM, {
     algorithm: 'RS256',
-    expiresIn: ACCESS_AND_ID_TOKEN_EXPIRES,
+    expiresIn: ACCESS_TOKEN_EXPIRES,
     issuer: OPENID_ISSUER,
     subject: client_id,
     keyid: OPENID_KEYID
   });
 
   return {
-    "access_token": access_token,
+    "access_token": accessToken,
     "token_type": "Bearer",
-    "expires_in": ACCESS_AND_ID_TOKEN_EXPIRES
+    "expires_in": ACCESS_TOKEN_EXPIRES
   };
 }
 
 function make_tokens(client_id, userid, scope, refresh = true){
-  const payload_id = {
+  const payloadId = {
     token_use: 'id',
     "cognito:username": userid,
     email: userid + '@test.com',
   };
 
-  const id_token = jwt.sign(payload_id, TOKEN_PRIKEY_PEM, {
+  const idToken = jwt.sign(payloadId, TOKEN_PRIVATE_KEY_PEM, {
     algorithm: 'RS256',
-    expiresIn: ACCESS_AND_ID_TOKEN_EXPIRES,
+    expiresIn: ID_TOKEN_EXPIRES,
     audience: client_id,
     issuer: OPENID_ISSUER,
     subject: userid,
     keyid: OPENID_KEYID,
   });
 
-  const payload_access_token = {
+  const payloadAccessToken = {
     token_use: 'access',
     scope: scope,
     "cognito:username": userid,
     email: userid + '@test.com',
   };
 
-  const access_token = jwt.sign(payload_access_token, TOKEN_PRIKEY_PEM, {
+  const accessToken = jwt.sign(payloadAccessToken, TOKEN_PRIVATE_KEY_PEM, {
     algorithm: 'RS256',
-    expiresIn: ACCESS_AND_ID_TOKEN_EXPIRES,
+    expiresIn: ACCESS_TOKEN_EXPIRES,
     audience: client_id,
     issuer: OPENID_ISSUER,
     subject: userid,
@@ -109,10 +116,10 @@ function make_tokens(client_id, userid, scope, refresh = true){
   });
 
   let tokens = {
-    access_token : access_token,
-    id_token : id_token,
+    access_token : accessToken,
+    id_token : idToken,
     token_type : "Bearer",
-    expires_in : ACCESS_AND_ID_TOKEN_EXPIRES,
+    expires_in : ACCESS_TOKEN_EXPIRES,
     refresh_token : undefined
   };
 
@@ -123,12 +130,12 @@ function make_tokens(client_id, userid, scope, refresh = true){
   return tokens;
 }
 
-function get_base_url(event : APIGatewayProxyEventV2) : string {
+function getBaseUrl(event : APIGatewayProxyEventV2) : string {
   return `https://${event.requestContext.domainName}`;
 }
 
-function parse_content(body : string, content_type : string) : any {
-  if(content_type == 'application/x-www-form-urlencoded') {
+function parseContent(body : string, contentType : string) : any {
+  if(contentType == 'application/x-www-form-urlencoded') {
     const items = body.split('&');
     let r = {};
     for(let i = 0; i < items.length; i++) {
@@ -144,18 +151,18 @@ function parse_content(body : string, content_type : string) : any {
   }
 }
 
-function get_parsed_content(event : APIGatewayProxyEventV2) : any {
+function getParsedContent(event : APIGatewayProxyEventV2) : any {
   let body = event.body;
   if (event.isBase64Encoded) {
     let buff = Buffer.from(body, "base64");
     body = buff.toString('utf-8');
   }
-  return parse_content(body, event.headers['content-type']);
+  return parseContent(body, event.headers['content-type']);
 }
 
 const oauth2_token = async (event : APIGatewayProxyEventV2) : Promise<APIGatewayProxyResultV2> => {
 
-  const params = get_parsed_content(event);
+  const params = getParsedContent(event);
 
   console.log(JSON.stringify(params));
 
@@ -184,7 +191,7 @@ const oauth2_token = async (event : APIGatewayProxyEventV2) : Promise<APIGateway
     const scope = params['scope'];
     const client_id = params['client_id'];
 
-    const tokens = make_access_token(client_id, scope);
+    const tokens = makeAccessToken(client_id, scope);
 
     return {
       statusCode: 200,
@@ -200,7 +207,7 @@ const oauth2_token = async (event : APIGatewayProxyEventV2) : Promise<APIGateway
 const oauth2_authorize = async (event : APIGatewayProxyEventV2) : Promise<APIGatewayProxyResultV2> => {
   const { client_id, redirect_uri, response_type, scope, state } = event.queryStringParameters;
 
-  const login_url = `${get_base_url(event)}/oauth2/ui/login.html`;
+  const login_url = `${getBaseUrl(event)}/oauth2/ui/login.html`;
 
   let url = login_url + '?client_id=' + client_id + '&redirect_uri=' + encodeURIComponent(redirect_uri) + '&response_type=' + response_type;
   if( scope )
@@ -208,7 +215,7 @@ const oauth2_authorize = async (event : APIGatewayProxyEventV2) : Promise<APIGat
   if( state )
     url += '&state=' + encodeURIComponent(state);
 
-  return make_redirect_response(url);
+  return makeRedirectResponse(url);
 }
 
 const oauth2_authorize_process = async (event : APIGatewayProxyEventV2) : Promise<APIGatewayProxyResultV2> => {
@@ -222,7 +229,7 @@ const oauth2_authorize_process = async (event : APIGatewayProxyEventV2) : Promis
     if( state )
       url += '&state=' + decodeURIComponent(state);
 
-    return make_redirect_response(url);
+    return makeRedirectResponse(url);
   } else if( response_type == 'code') {
     const code = Buffer.from(client_id + ':' + userid + ':' + scope, 'ascii').toString('hex');
 
@@ -230,10 +237,10 @@ const oauth2_authorize_process = async (event : APIGatewayProxyEventV2) : Promis
     if( state )
       url += '&state=' + decodeURIComponent(state);
 
-    return make_redirect_response(url);
+    return makeRedirectResponse(url);
   }
 
-  return make_bad_request_response();
+  return makeBadRequestResponse();
 }
 
 const oauth2_userInfo = async (event : APIGatewayProxyEventV2) : Promise<APIGatewayProxyResultV2> => {
@@ -246,7 +253,7 @@ const oauth2_jwks_json = async (event : APIGatewayProxyEventV2) : Promise<APIGat
   if( jwkjson == null ){
     jwkjson = {
       keys: [
-        tojwks(TOKEN_PRIKEY_PEM, {use: 'sig', kid: OPENID_KEYID, alg: 'RS256'}, 'pub')
+        tojwks(TOKEN_PRIVATE_KEY_PEM, {use: 'sig', kid: OPENID_KEYID, alg: 'RS256'}, 'pub')
       ]
     };
   }
@@ -258,7 +265,7 @@ const oauth2_jwks_json = async (event : APIGatewayProxyEventV2) : Promise<APIGat
 }
 
 const oauth2_openid_configuration = async (event : APIGatewayProxyEventV2) : Promise<APIGatewayProxyResultV2> => {
-  const base_url = get_base_url(event);
+  const base_url = getBaseUrl(event);
   const configjson = {
     authorization_endpoint: base_url + "/oauth2/authorize",
     id_token_signing_alg_values_supported: [

@@ -19,6 +19,8 @@ const serverlessConfiguration: AWS = {
     profile: 'default',
     runtime: 'nodejs16.x',
     architecture: 'arm64',
+    memorySize: 256,
+    timeout: 28,
     httpApi: {
       payload: '2.0',
       shouldStartNameWithService: true,
@@ -27,7 +29,8 @@ const serverlessConfiguration: AWS = {
       AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
       OPENID_KEYID: 'mock_keyid',
       OPENID_ISSUER: 'moch_service',
-      ACCESS_AND_ID_TOKEN_EXPIRES: '3600'
+      ACCESS_TOKEN_EXPIRES: '3600',
+      ID_TOKEN_EXPIRES: '3600'
     },
     lambdaHashingVersion: '20201221',
   },
