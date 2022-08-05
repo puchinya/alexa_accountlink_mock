@@ -5,10 +5,10 @@ import {middyfy} from '@libs/lambda';
 const jwt = require('jsonwebtoken');
 const tojwks = require('rsa-pem-to-jwk');
 
-const issuer = process.env.ISSUER || 'mock';
-const keyid = process.env.KEYID || 'testkeyid';
-const expire = 60 * 60;
-const PRIKEY_PEM = process.env.PRIKEY_PEM || "-----BEGIN RSA PRIVATE KEY-----\n" +
+const OPENID_ISSUER = process.env.OPENID_ISSUER || 'mock';
+const OPENID_KEYID = process.env.OPENID_KEYID || 'testkeyid';
+const ACCESS_AND_ID_TOKEN_EXPIRES = parseInt(process.env.ACCESS_AND_ID_TOKEN_EXPIRES) || 60 * 60;
+const TOKEN_PRIKEY_PEM = process.env.TOKEN_PRIKEY_PEM || "-----BEGIN RSA PRIVATE KEY-----\n" +
     "MIIEpAIBAAKCAQEArPuK1U6B+PDta4NGONxQqYGWZGs5DvIFAWgrX5rQbtscjNMm\n" +
     "11Gpmg8PubADSCn/+pLpUl88pxsAWuMdQb4ULF5rdM0kl/VG5nVv6hVAxXzvVy9S\n" +
     "vLbOkzNnyfPyEd9gWTICz9szXsW7cvn9bwh7xQSTKPxZlIQBcsDuTmcGQq7/w2Y/\n" +
@@ -61,18 +61,18 @@ function make_access_token(client_id : string, scope : string) : any
     scope: scope,
     client_id: client_id,
   };
-  const access_token = jwt.sign(payload_access_token, PRIKEY_PEM, {
+  const access_token = jwt.sign(payload_access_token, TOKEN_PRIKEY_PEM, {
     algorithm: 'RS256',
-    expiresIn: expire,
-    issuer: issuer,
+    expiresIn: ACCESS_AND_ID_TOKEN_EXPIRES,
+    issuer: OPENID_ISSUER,
     subject: client_id,
-    keyid: keyid
+    keyid: OPENID_KEYID
   });
 
   return {
     "access_token": access_token,
     "token_type": "Bearer",
-    "expires_in": expire
+    "expires_in": ACCESS_AND_ID_TOKEN_EXPIRES
   };
 }
 
@@ -83,13 +83,13 @@ function make_tokens(client_id, userid, scope, refresh = true){
     email: userid + '@test.com',
   };
 
-  const id_token = jwt.sign(payload_id, PRIKEY_PEM, {
+  const id_token = jwt.sign(payload_id, TOKEN_PRIKEY_PEM, {
     algorithm: 'RS256',
-    expiresIn: expire,
+    expiresIn: ACCESS_AND_ID_TOKEN_EXPIRES,
     audience: client_id,
-    issuer: issuer,
+    issuer: OPENID_ISSUER,
     subject: userid,
-    keyid: keyid,
+    keyid: OPENID_KEYID,
   });
 
   const payload_access_token = {
@@ -99,20 +99,20 @@ function make_tokens(client_id, userid, scope, refresh = true){
     email: userid + '@test.com',
   };
 
-  const access_token = jwt.sign(payload_access_token, PRIKEY_PEM, {
+  const access_token = jwt.sign(payload_access_token, TOKEN_PRIKEY_PEM, {
     algorithm: 'RS256',
-    expiresIn: expire,
+    expiresIn: ACCESS_AND_ID_TOKEN_EXPIRES,
     audience: client_id,
-    issuer: issuer,
+    issuer: OPENID_ISSUER,
     subject: userid,
-    keyid: keyid,
+    keyid: OPENID_KEYID,
   });
 
   let tokens = {
     access_token : access_token,
     id_token : id_token,
     token_type : "Bearer",
-    expires_in : expire,
+    expires_in : ACCESS_AND_ID_TOKEN_EXPIRES,
     refresh_token : undefined
   };
 
@@ -223,7 +223,7 @@ const oauth2_authorize_process = async (event : APIGatewayProxyEventV2) : Promis
       url += '&state=' + decodeURIComponent(state);
 
     return make_redirect_response(url);
-  } else if( response_type == 'code' ) {
+  } else if( response_type == 'code') {
     const code = Buffer.from(client_id + ':' + userid + ':' + scope, 'ascii').toString('hex');
 
     let url = redirect_uri + '?code=' + code;
@@ -246,7 +246,7 @@ const oauth2_jwks_json = async (event : APIGatewayProxyEventV2) : Promise<APIGat
   if( jwkjson == null ){
     jwkjson = {
       keys: [
-        tojwks(PRIKEY_PEM, {use: 'sig', kid: keyid, alg: 'RS256'}, 'pub')
+        tojwks(TOKEN_PRIKEY_PEM, {use: 'sig', kid: OPENID_KEYID, alg: 'RS256'}, 'pub')
       ]
     };
   }
@@ -264,7 +264,7 @@ const oauth2_openid_configuration = async (event : APIGatewayProxyEventV2) : Pro
     id_token_signing_alg_values_supported: [
       "RS256"
     ],
-    issuer: issuer,
+    issuer: OPENID_ISSUER,
     jwks_uri: base_url + "/.well-known/jwks.json",
     response_types_supported: [
       "code",
